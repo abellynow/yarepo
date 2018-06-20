@@ -98,7 +98,6 @@ def get_revision(project):
     return revision
 
 def get_current_branch(project):
-    # todo: fix so this also works with detached heads...
     path = project.path if project.path else os.path.basename(project.name)
     (exit_code, branches) = git_cmd_get(path, 'branch')
     cur_branch = ''
@@ -108,12 +107,27 @@ def get_current_branch(project):
             break
     return cur_branch
 
+def is_detached(project):
+    path = project.path if project.path else os.path.basename(project.name)
+    (res, test) = git_cmd_get(path, 'status -b -s')
+    return test.split('\n')[0] == '## HEAD (no branch)'
+
+def get_head_commit(project):
+    path = project.path if project.path else os.path.basename(project.name)
+    (res, test) = git_cmd_get(path, 'log -1')
+    return test.split('\n')[0].split(' ')[1]
+
+def get_branch_or_head(project):
+    if is_detached(project):
+        return get_head_commit(project)
+    else:
+        return get_current_branch(project)
+
 def clone_project(project):
     if project.remote:
         remote = get_remote(project.remote)
     else:
         remote = get_remote(None)
-
     remote = remote + '/' + project.name + ' '
 
     path = project.path if project.path else os.path.basename(project.name)
@@ -176,7 +190,7 @@ if args.sync:
                 if remote != cur_remote:
                     git_cmd(path, 'remote set-url origin ' + remote)
                     git_cmd(path, 'fetch --all')
-                cur_branch = get_current_branch(project)
+                cur_branch = get_branch_or_head(project)
                 wanted_branch = get_revision(project)
                 if cur_branch != '' and cur_branch != wanted_branch:
                     git_cmd(path, 'checkout ' + wanted_branch)
@@ -190,7 +204,7 @@ if args.checkout:
     for project in m_projects:
         print('project ' + project.name)
         path = project.path if project.path else os.path.basename(project.name)
-        cur_branch = get_current_branch(project)
+        cur_branch = get_branch_or_head(project)
         wanted_branch = get_revision(project)
         if cur_branch != '' and cur_branch != wanted_branch:
             git_cmd(path, 'checkout ' + wanted_branch)
